@@ -143,7 +143,7 @@ class TwilioWhatsAppHandler:
             db.rollback()
             return JSONResponse(content={"message": "Internal server error"}, status_code=500)
 
-    async def send_admin_notification(self, user_phone: str, summary_generated: bool, db: Session):
+    async def send_admin_notification(self, user_phone: str, is_split_message: bool, db: Session):
         try:
             # Get user status info from db (reuse existing session)
             user = self.user_manager.get_user_by_phone(user_phone)
@@ -170,8 +170,8 @@ class TwilioWhatsAppHandler:
                 f"Status: {' '.join(status_parts)}"
             )
 
-            if summary_generated:
-                message += "\nℹ️ Summary was generated"
+            if is_split_message:
+                message += "\nℹ️ Long message split into multiple parts"
 
             self.twilio_client.messages.create(
                 body=message,
@@ -184,33 +184,53 @@ class TwilioWhatsAppHandler:
 
     async def send_transcription(self, to_number: str, transcription: str, embedding: list[float], db: Session):
         try:
-            # 1. Create message record
+            # 1. Create message record with hash for web access
             db_message = Message(phone_number=to_number, embedding=embedding)
             db_message.text = transcription
-
-            summary_generated = False
+            message_hash = uuid.uuid4().hex
+            db_message.hash = message_hash
+            
+            is_split_message = len(transcription) > MAX_WHATSAPP_MESSAGE_LENGTH
 
             # 2. Send user messages
-            if len(transcription) <= MAX_WHATSAPP_MESSAGE_LENGTH:
+            if not is_split_message:
                 await self.send_templated_message(to_number, "transcription", transcription=transcription)
             else:
-                summary_generated = True
-                message_hash = uuid.uuid4().hex
-                self.logger.info(f"Generated hash for message: {message_hash}")
-                db_message.hash = message_hash
-
-                await self.send_templated_message(to_number, "long_transcription_initial", transcription_url=f"{self.base_url}/transcript/{message_hash}")
-
-                summary = await self.llm_handler.generate_summary(transcription)
-                await self.send_templated_message(to_number, "long_transcription_summary", summary=summary)
+                # First send the web link
+                transcription_url = f"{self.base_url}/transcript/{message_hash}"
+                await self.send_templated_message(
+                    to_number,
+                    "long_transcription_initial",
+                    transcription_url=transcription_url
+                )
+                
+                # Then split and send the transcription in parts
+                message_parts = self.split_message(transcription, MAX_WHATSAPP_MESSAGE_LENGTH)
+                await self.send_templated_message(
+                    to_number, 
+                    "split_transcription_initial", 
+                    total_parts=len(message_parts)
+                )
+                
+                for i, part in enumerate(message_parts, 1):
+                    await self.send_templated_message(
+                        to_number,
+                        "split_transcription_part",
+                        part_number=i,
+                        total_parts=len(message_parts),
+                        transcription=part
+                    )
 
             # 3. Save to database
             db.add(db_message)
             db.commit()
 
+            # 4. Send admin notification
+            await self.send_admin_notification(to_number, is_split_message, db)
+
         except Exception as e:
             self.logger.error(f"Failed to send transcription to {to_number}: {str(e)}")
-            raise  # Re-raise the exception for main error handling
+            raise
 
     async def send_templated_message(self, to_number: str, template_key: str, **kwargs):
         await self.message_sender.send_templated_message(to_number, template_key, **kwargs)
@@ -230,22 +250,69 @@ class TwilioWhatsAppHandler:
         await self.send_templated_message(to_number, "subscription_reminder", message=response)
 
     async def process_voice_message(self, phone_number: str, voice_message_url: str, db: Session) -> str:
-        await self.send_templated_message(phone_number, "processing_confirmation")
+        try:
+            await self.send_templated_message(phone_number, "processing_confirmation")
 
-        if not voice_message_url:
-            self.logger.error("No media found")
-            raise ValueError("No media found")
+            if not voice_message_url:
+                self.logger.error("No media found")
+                raise ValueError("No media found")
 
-        transcription = await self.voice_message_processor.process_voice_message(
-            voice_message_url,
-            self.account_sid,
-            self.auth_token
-        )
-        self.logger.info(f"Transcription: {transcription[:50]}")
+            # Log the start of transcription
+            self.logger.info(f"Starting transcription for {phone_number}")
 
-        # Use the llm_handler instance to generate the embedding
-        embedding = self.llm_handler.generate_embedding(transcription)
+            transcription = await self.voice_message_processor.process_voice_message(
+                voice_message_url,
+                self.account_sid,
+                self.auth_token
+            )
+            
+            # Log the transcription length and first few characters
+            self.logger.info(f"Transcription length: {len(transcription)}")
+            self.logger.info(f"Transcription start: {transcription[:100]}")
 
-        await self.send_transcription(phone_number, transcription, embedding, db)
+            # Generate embedding
+            embedding = self.llm_handler.generate_embedding(transcription)
 
-        return transcription
+            # Send transcription with more detailed logging
+            self.logger.info("Sending transcription to user...")
+            await self.send_transcription(phone_number, transcription, embedding, db)
+            self.logger.info("Transcription sent successfully")
+
+            return transcription
+
+        except Exception as e:
+            self.logger.error(f"Error in process_voice_message: {str(e)}")
+            raise
+
+    def split_message(self, text: str, max_length: int) -> list[str]:
+        """
+        Split a long message into parts that don't exceed max_length.
+        Tries to split at sentence boundaries when possible.
+        """
+        if len(text) <= max_length:
+            return [text]
+        
+        parts = []
+        while text:
+            if len(text) <= max_length:
+                parts.append(text)
+                break
+                
+            # Try to find a sentence boundary
+            split_point = max_length
+            for separator in ['. ', '! ', '? ', '\n']:
+                last_separator = text[:max_length].rfind(separator)
+                if last_separator != -1:
+                    split_point = last_separator + len(separator)
+                    break
+                
+            # If no sentence boundary found, try to split at last space
+            if split_point == max_length:
+                last_space = text[:max_length].rfind(' ')
+                if last_space != -1:
+                    split_point = last_space + 1
+            
+            parts.append(text[:split_point].strip())
+            text = text[split_point:].strip()
+        
+        return parts

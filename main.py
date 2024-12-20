@@ -1,26 +1,18 @@
 # Standard library imports
-import io
 import logging
-import uuid
-from datetime import datetime, timezone
 
 # Third-party imports
-from openai import OpenAI
-import requests
 import stripe
 from fastapi import Depends, FastAPI, HTTPException, Request
 from fastapi.responses import JSONResponse, RedirectResponse, Response
 from fastapi.templating import Jinja2Templates
 from sqlalchemy.orm import Session
-from twilio.request_validator import RequestValidator
-from twilio.rest import Client
+import markdown2
 
 # Local imports
-from handlers.llm_handler import LLMHandler
-from handlers.voice_message_processor import VoiceMessageProcessor
 from handlers.stripe_handler import StripeHandler
 from handlers.twilio_whatsapp_handler import TwilioWhatsAppHandler
-from database import DATABASE_URL, Message, WhitelistedNumber, User, get_db
+from database import DATABASE_URL, Message, get_db
 from config import (
     BASE_URL, STRIPE_PAYMENT_LINK, STRIPE_CUSTOMER_PORTAL_URL,
     TWILIO_ACCOUNT_SID, TWILIO_AUTH_TOKEN, OPENAI_API_KEY,
@@ -28,7 +20,6 @@ from config import (
     STRIPE_WEBHOOK_SECRET, STRIPE_API_KEY,
     ADMIN_PHONE_NUMBER
 )
-from message_templates import get_message_template
 
 # Configure logging
 logging.basicConfig(
@@ -41,6 +32,19 @@ app = FastAPI()
 
 # Initialize Jinja2 templates
 templates = Jinja2Templates(directory="templates")
+
+# Add markdown filter to Jinja2
+def markdown_to_html(text):
+    if not text:
+        return ""
+    # Configure markdown2 with the features we need
+    return markdown2.markdown(text, extras=[
+        "break-on-newline",   # Convert newlines to <br>
+        "cuddled-lists",      # Allow lists to be cuddled to the preceding paragraph
+        "fenced-code-blocks"  # Support for ```code blocks```
+    ])
+
+templates.env.filters["markdown"] = markdown_to_html
 
 # Create an instance of TwilioWhatsAppHandler with dependency injection
 @app.post("/whatsapp", response_model=None)
@@ -128,7 +132,6 @@ async def get_transcription_by_hash(message_hash: str, request: Request, db: Ses
     # Check if the User-Agent belongs to a pre-fetcher
     if any(agent in user_agent for agent in prefetch_user_agents):
         logger.info("Detected pre-fetch request. Serving minimal response.")
-        # Serve a minimal response without deleting the hash
         return Response(status_code=200)
 
     # Proceed with normal logic for actual user requests
@@ -141,23 +144,17 @@ async def get_transcription_by_hash(message_hash: str, request: Request, db: Ses
             return templates.TemplateResponse("transcript.html", {
                 "request": request,
                 "transcription": None,
-                "error_message": "🚨 Error: Transcription not found or already viewed"
+                "error_message": "🚨 Error: Transcription not found"
             })
 
         logger.info(f"Found message. First 100 characters: {db_message.text[:100]}...")
 
         # Return the transcription
-        response = templates.TemplateResponse("transcript.html", {
+        return templates.TemplateResponse("transcript.html", {
             "request": request,
-            "transcription": db_message.text,  # This will use the getter to decrypt
+            "transcription": db_message.text,
             "error_message": None
         })
-
-        # Delete the hash to prevent future access
-        db_message.hash = None
-        db.commit()
-
-        return response
 
     except Exception as e:
         logger.error(f"Error retrieving transcription: {str(e)}")
