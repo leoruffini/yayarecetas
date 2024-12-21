@@ -184,12 +184,26 @@ class TwilioWhatsAppHandler:
 
     async def send_transcription(self, to_number: str, transcription: str, embedding: list[float], db: Session):
         try:
-            # 1. Create message record with hash for web access
+            # Get user from database
+            user = self.user_manager.get_user_by_phone(to_number)
+            user_id = user.id if user else '0'
+            
+            # Get recipe slug
+            recipe_slug = self.get_recipe_slug(transcription, db)
+            
+            # Create message record with slug instead of random hash
             db_message = Message(phone_number=to_number, embedding=embedding)
             db_message.text = transcription
-            message_hash = uuid.uuid4().hex
-            db_message.hash = message_hash
+            db_message.hash = recipe_slug  # Using hash column for the slug
             
+            # Save to database
+            db.add(db_message)
+            db.commit()
+            
+            # Generate URL
+            transcription_url = f"{self.base_url}/yaya{user_id}/{recipe_slug}"
+            
+            # 2. Send user messages
             is_split_message = len(transcription) > MAX_WHATSAPP_MESSAGE_LENGTH
 
             # 2. Send user messages
@@ -197,7 +211,6 @@ class TwilioWhatsAppHandler:
                 await self.send_templated_message(to_number, "transcription", transcription=transcription)
             else:
                 # First send the web link
-                transcription_url = f"{self.base_url}/transcript/{message_hash}"
                 await self.send_templated_message(
                     to_number,
                     "long_transcription_initial",
@@ -220,10 +233,6 @@ class TwilioWhatsAppHandler:
                         total_parts=len(message_parts),
                         transcription=part
                     )
-
-            # 3. Save to database
-            db.add(db_message)
-            db.commit()
 
             # 4. Send admin notification
             await self.send_admin_notification(to_number, is_split_message, db)
@@ -316,3 +325,47 @@ class TwilioWhatsAppHandler:
             text = text[split_point:].strip()
         
         return parts
+
+    def get_recipe_slug(self, transcription: str, db: Session) -> str:
+        """Extract recipe name from transcription and add counter if needed"""
+        try:
+            import unicodedata
+            import re
+            
+            # Find the first line that starts with # (recipe title)
+            lines = transcription.split('\n')
+            for line in lines:
+                if line.startswith('# '):
+                    # Remove the # and trim whitespace
+                    title = line[2:].strip()
+                    
+                    # Convert to lowercase and handle Spanish characters
+                    title = title.lower()
+                    title = unicodedata.normalize('NFKD', title).encode('ASCII', 'ignore').decode()
+                    
+                    # Replace spaces and invalid characters with hyphens
+                    title = re.sub(r'[^\w\s-]', '', title)  # Remove special characters
+                    title = re.sub(r'[-\s]+', '-', title)   # Replace spaces with single hyphen
+                    base_slug = title.strip('-')            # Remove leading/trailing hyphens
+                    
+                    # Check if slug exists and add counter if needed
+                    slug = base_slug
+                    counter = 1
+                    while True:
+                        # Check if this slug exists for any user
+                        existing_message = db.query(Message)\
+                            .filter(Message.hash == slug)\
+                            .first()
+                        
+                        if not existing_message:
+                            return slug
+                        
+                        # If exists, add counter and try again
+                        slug = f"{base_slug}-{counter}"
+                        counter += 1
+                
+            return "untitled-recipe"
+            
+        except Exception as e:
+            self.logger.error(f"Error creating recipe slug: {str(e)}")
+            return "untitled-recipe"

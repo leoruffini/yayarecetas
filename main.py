@@ -12,7 +12,7 @@ import markdown2
 # Local imports
 from handlers.stripe_handler import StripeHandler
 from handlers.twilio_whatsapp_handler import TwilioWhatsAppHandler
-from database import DATABASE_URL, Message, get_db
+from database import DATABASE_URL, Message, User, get_db
 from config import (
     BASE_URL, STRIPE_PAYMENT_LINK, STRIPE_CUSTOMER_PORTAL_URL,
     TWILIO_ACCOUNT_SID, TWILIO_AUTH_TOKEN, OPENAI_API_KEY,
@@ -113,55 +113,97 @@ async def success(request: Request):
 async def cancel(request: Request):
     return templates.TemplateResponse("cancel.html", {"request": request})
 
-@app.get("/transcript/{message_hash}", response_model=None)
-async def get_transcription_by_hash(message_hash: str, request: Request, db: Session = Depends(get_db)):
-    logger.info(f"Attempting to retrieve message with hash: {message_hash}")
-
+@app.get("/yaya{user_id}/{recipe_slug}")
+async def get_transcription_by_slug(
+    user_id: int, 
+    recipe_slug: str, 
+    request: Request, 
+    db: Session = Depends(get_db)
+):
+    logger.info(f"Attempting to retrieve recipe for user {user_id}: {recipe_slug}")
+    
+    # Format title from slug for display
+    display_title = recipe_slug.replace('-', ' ').title()
+    
     # Get the User-Agent header
     user_agent = request.headers.get('User-Agent', '')
-    logger.info(f"User-Agent: {user_agent}")
-
-    # Define a list of known pre-fetcher User-Agents
+    logger.debug(f"User-Agent: {user_agent}")
+    
+    # Check for pre-fetchers (reuse existing code)
     prefetch_user_agents = [
         'WhatsApp',
         'facebookexternalhit',
         'Facebot',
-        # Add other known pre-fetcher identifiers if necessary
     ]
-
-    # Check if the User-Agent belongs to a pre-fetcher
+    
     if any(agent in user_agent for agent in prefetch_user_agents):
-        logger.info("Detected pre-fetch request. Serving minimal response.")
+        logger.info(f"Detected pre-fetch request from {user_agent}")
         return Response(status_code=200)
-
-    # Proceed with normal logic for actual user requests
+    
     try:
-        # Query the database for the message with the given hash
-        db_message = db.query(Message).filter(Message.hash == message_hash).first()
-
-        if not db_message:
-            logger.error(f"Transcription not found for hash: {message_hash}")
+        # Get user from database
+        user = db.query(User).filter(User.id == user_id).first()
+        if not user:
+            logger.warning(f"User not found: ID {user_id}")
             return templates.TemplateResponse("transcript.html", {
                 "request": request,
                 "transcription": None,
-                "error_message": "🚨 Error: Transcription not found"
+                "error_message": "🚨 Error: User not found",
+                "title": "Error"
             })
-
-        logger.info(f"Found message. First 100 characters: {db_message.text[:100]}...")
-
-        # Return the transcription
+            
+        logger.debug(f"Found user: {user.phone_number}")
+            
+        # Get latest message for this user
+        message = db.query(Message)\
+            .filter(Message.phone_number == user.phone_number)\
+            .order_by(Message.created_at.desc())\
+            .first()
+            
+        if not message:
+            logger.warning(f"No messages found for user {user_id} (phone: {user.phone_number})")
+            return templates.TemplateResponse("transcript.html", {
+                "request": request,
+                "transcription": None,
+                "error_message": "🚨 Error: Recipe not found",
+                "title": "Error"
+            })
+            
+        # Extract actual title from message content if possible
+        try:
+            lines = message.text.split('\n')
+            for line in lines:
+                if line.startswith('# '):
+                    display_title = line[2:].strip()
+                    logger.debug(f"Extracted title from message: {display_title}")
+                    break
+        except Exception as e:
+            logger.warning(
+                f"Could not extract title from message for user {user_id}: {str(e)}\n"
+                f"First 100 chars of message: {message.text[:100]}"
+            )
+            # Keep using the slug-based title as fallback
+            
+        logger.info(f"Successfully retrieved recipe '{display_title}' for user {user_id}")
         return templates.TemplateResponse("transcript.html", {
             "request": request,
-            "transcription": db_message.text,
-            "error_message": None
+            "transcription": message.text,
+            "error_message": None,
+            "title": display_title
         })
-
+        
     except Exception as e:
-        logger.error(f"Error retrieving transcription: {str(e)}")
+        logger.error(
+            f"Error retrieving recipe for user {user_id} - {recipe_slug}\n"
+            f"Error type: {type(e).__name__}\n"
+            f"Error details: {str(e)}\n"
+            f"User-Agent: {user_agent}"
+        )
         return templates.TemplateResponse("transcript.html", {
             "request": request,
             "transcription": None,
-            "error_message": "An error occurred while retrieving the transcription"
+            "error_message": "An error occurred while retrieving the recipe",
+            "title": "Error"
         })
 
 # Retrieve database info
