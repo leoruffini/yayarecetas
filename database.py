@@ -32,7 +32,8 @@ class Message(Base):
     encrypted_text = Column(LargeBinary)  # Changed from text to encrypted_text
     embedding = Column(ARRAY(Float))
     created_at = Column(DateTime, default=lambda: datetime.now(timezone.utc))
-    hash = Column(String, unique=True, index=True, nullable=True)  # Allow null values
+    hash = Column(String, index=True, nullable=True)  # Keep for backward compatibility
+    slug = Column(String, index=True, nullable=True)  # New column for clean URLs
 
     @property
     def text(self):

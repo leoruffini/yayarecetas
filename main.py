@@ -1,5 +1,6 @@
 # Standard library imports
 import logging
+from datetime import datetime, timedelta
 
 # Third-party imports
 import stripe
@@ -122,29 +123,23 @@ async def get_transcription_by_slug(
 ):
     logger.info(f"Attempting to retrieve recipe for user {user_id}: {recipe_slug}")
     
-    # Format title from slug for display
-    display_title = recipe_slug.replace('-', ' ').title()
-    
-    # Get the User-Agent header
-    user_agent = request.headers.get('User-Agent', '')
-    logger.debug(f"User-Agent: {user_agent}")
-    
-    # Check for pre-fetchers (reuse existing code)
-    prefetch_user_agents = [
-        'WhatsApp',
-        'facebookexternalhit',
-        'Facebot',
-    ]
-    
-    if any(agent in user_agent for agent in prefetch_user_agents):
-        logger.info(f"Detected pre-fetch request from {user_agent}")
-        return Response(status_code=200)
+    # Extract date from slug (last 8 characters: YYYYMMDD)
+    try:
+        date_str = recipe_slug[-8:]
+        recipe_date = datetime.strptime(date_str, '%Y%m%d')
+        base_slug = recipe_slug[:-9]  # Remove -YYYYMMDD
+        
+        # Format title from base slug
+        display_title = base_slug.replace('-', ' ').title()
+    except ValueError:
+        logger.warning(f"Invalid recipe slug format: {recipe_slug}")
+        recipe_date = None
+        display_title = recipe_slug.replace('-', ' ').title()
     
     try:
         # Get user from database
         user = db.query(User).filter(User.id == user_id).first()
         if not user:
-            logger.warning(f"User not found: ID {user_id}")
             return templates.TemplateResponse("transcript.html", {
                 "request": request,
                 "transcription": None,
@@ -152,16 +147,21 @@ async def get_transcription_by_slug(
                 "title": "Error"
             })
             
-        logger.debug(f"Found user: {user.phone_number}")
+        # Get message for this user and date
+        query = db.query(Message)\
+            .filter(Message.phone_number == user.phone_number)
             
-        # Get latest message for this user
-        message = db.query(Message)\
-            .filter(Message.phone_number == user.phone_number)\
-            .order_by(Message.created_at.desc())\
-            .first()
+        if recipe_date:
+            # If we have a valid date, filter by date
+            next_day = recipe_date + timedelta(days=1)
+            query = query.filter(
+                Message.created_at >= recipe_date,
+                Message.created_at < next_day
+            )
+        
+        message = query.order_by(Message.created_at.desc()).first()
             
         if not message:
-            logger.warning(f"No messages found for user {user_id} (phone: {user.phone_number})")
             return templates.TemplateResponse("transcript.html", {
                 "request": request,
                 "transcription": None,
@@ -169,22 +169,6 @@ async def get_transcription_by_slug(
                 "title": "Error"
             })
             
-        # Extract actual title from message content if possible
-        try:
-            lines = message.text.split('\n')
-            for line in lines:
-                if line.startswith('# '):
-                    display_title = line[2:].strip()
-                    logger.debug(f"Extracted title from message: {display_title}")
-                    break
-        except Exception as e:
-            logger.warning(
-                f"Could not extract title from message for user {user_id}: {str(e)}\n"
-                f"First 100 chars of message: {message.text[:100]}"
-            )
-            # Keep using the slug-based title as fallback
-            
-        logger.info(f"Successfully retrieved recipe '{display_title}' for user {user_id}")
         return templates.TemplateResponse("transcript.html", {
             "request": request,
             "transcription": message.text,
@@ -193,12 +177,7 @@ async def get_transcription_by_slug(
         })
         
     except Exception as e:
-        logger.error(
-            f"Error retrieving recipe for user {user_id} - {recipe_slug}\n"
-            f"Error type: {type(e).__name__}\n"
-            f"Error details: {str(e)}\n"
-            f"User-Agent: {user_agent}"
-        )
+        logger.error(f"Error retrieving recipe for user {user_id} - {recipe_slug}: {str(e)}")
         return templates.TemplateResponse("transcript.html", {
             "request": request,
             "transcription": None,

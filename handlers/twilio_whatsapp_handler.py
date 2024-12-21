@@ -191,22 +191,25 @@ class TwilioWhatsAppHandler:
             # Get recipe slug
             recipe_slug = self.get_recipe_slug(transcription, db)
             
-            # Create message record with slug instead of random hash
-            db_message = Message(phone_number=to_number, embedding=embedding)
+            # Create message record
+            db_message = Message(
+                phone_number=to_number, 
+                embedding=embedding,
+                hash=uuid.uuid4().hex,  # Keep generating random hash for backward compatibility
+                slug=recipe_slug        # Use new slug column for URLs
+            )
             db_message.text = transcription
-            db_message.hash = recipe_slug  # Using hash column for the slug
             
             # Save to database
             db.add(db_message)
             db.commit()
             
-            # Generate URL
+            # Generate URL using slug
             transcription_url = f"{self.base_url}/yaya{user_id}/{recipe_slug}"
             
-            # 2. Send user messages
             is_split_message = len(transcription) > MAX_WHATSAPP_MESSAGE_LENGTH
 
-            # 2. Send user messages
+            # Send user messages
             if not is_split_message:
                 await self.send_templated_message(to_number, "transcription", transcription=transcription)
             else:
@@ -233,10 +236,10 @@ class TwilioWhatsAppHandler:
                         total_parts=len(message_parts),
                         transcription=part
                     )
-
-            # 4. Send admin notification
+                
+            # Send admin notification
             await self.send_admin_notification(to_number, is_split_message, db)
-
+            
         except Exception as e:
             self.logger.error(f"Failed to send transcription to {to_number}: {str(e)}")
             raise
@@ -327,7 +330,7 @@ class TwilioWhatsAppHandler:
         return parts
 
     def get_recipe_slug(self, transcription: str, db: Session) -> str:
-        """Extract recipe name from transcription and add counter if needed"""
+        """Extract recipe name from transcription and convert to URL-friendly slug"""
         try:
             import unicodedata
             import re
@@ -354,7 +357,7 @@ class TwilioWhatsAppHandler:
                     while True:
                         # Check if this slug exists for any user
                         existing_message = db.query(Message)\
-                            .filter(Message.hash == slug)\
+                            .filter(Message.slug == slug)\
                             .first()
                         
                         if not existing_message:
