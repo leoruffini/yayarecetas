@@ -87,7 +87,6 @@ class TwilioWhatsAppHandler:
                 voice_message_url = form_data.get('MediaUrl0')
                 try:
                     transcription = await self.process_voice_message(phone_number, voice_message_url, db)
-                    await self.send_admin_notification(phone_number, len(transcription) > MAX_WHATSAPP_MESSAGE_LENGTH, db)
                 except ValueError as e:
                     return JSONResponse(content={"message": str(e)}, status_code=400)
                 return JSONResponse(content={"message": "Voice message processed successfully"}, status_code=200)
