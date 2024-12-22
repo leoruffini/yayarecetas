@@ -207,20 +207,23 @@ class TwilioWhatsAppHandler:
             # Generate URL using slug
             transcription_url = f"{self.base_url}/yaya{user_id}/{recipe_slug}"
             
+            # Always send the web link first
+            await self.send_templated_message(
+                to_number,
+                "long_transcription_initial",
+                transcription_url=transcription_url
+            )
+            
+            # Then send the transcription (either full or split)
             is_split_message = len(transcription) > MAX_WHATSAPP_MESSAGE_LENGTH
-
-            # Send user messages
+            
             if not is_split_message:
-                await self.send_templated_message(to_number, "transcription", transcription=transcription)
-            else:
-                # First send the web link
                 await self.send_templated_message(
-                    to_number,
-                    "long_transcription_initial",
-                    transcription_url=transcription_url
+                    to_number, 
+                    "transcription", 
+                    transcription=transcription
                 )
-                
-                # Then split and send the transcription in parts
+            else:
                 message_parts = self.split_message(transcription, MAX_WHATSAPP_MESSAGE_LENGTH)
                 await self.send_templated_message(
                     to_number, 
@@ -236,7 +239,7 @@ class TwilioWhatsAppHandler:
                         total_parts=len(message_parts),
                         transcription=part
                     )
-                
+            
             # Send admin notification
             await self.send_admin_notification(to_number, is_split_message, db)
             
