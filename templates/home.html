@@ -1,0 +1,185 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Yayarecetas - Preserva tus recetas familiares</title>
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.2/dist/css/bootstrap.min.css" rel="stylesheet">
+    <style>
+        :root {
+            --brand-green: #4a9f82;
+            --brand-beige: #f8f1e9;
+            --brand-pink: #ffb7b7;
+        }
+
+        body {
+            background-color: #ffffff;
+            font-family: 'Segoe UI', system-ui, -apple-system, sans-serif;
+        }
+
+        .hero {
+            padding: 6rem 0;
+        }
+
+        .hero-image {
+            max-width: 400px;
+            margin: 0 auto;
+        }
+
+        .whatsapp-button {
+            background-color: var(--brand-green);
+            border: none;
+            padding: 1rem 2rem;
+            border-radius: 8px;
+            color: white;
+            font-weight: 600;
+            text-decoration: none;
+            display: inline-block;
+            transition: background-color 0.2s;
+            font-size: 1.1rem;
+        }
+
+        .whatsapp-button:hover {
+            background-color: #3d8b6f;
+            color: white;
+        }
+
+        .steps-section {
+            padding: 6rem 0;
+            background-color: var(--brand-beige);
+        }
+
+        .step-card {
+            background-color: white;
+            border-radius: 12px;
+            padding: 2rem;
+            height: 100%;
+            box-shadow: 0 4px 16px rgba(0,0,0,0.06);
+            transition: transform 0.2s;
+        }
+
+        .step-card:hover {
+            transform: translateY(-4px);
+        }
+
+        .step-icon {
+            width: 80px;
+            height: 80px;
+            background-color: var(--brand-green);
+            border-radius: 50%;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            margin: 0 auto 2rem;
+        }
+
+        .step-icon span {
+            font-size: 2.5rem;
+        }
+
+        .recipes-section {
+            padding: 6rem 0;
+        }
+
+        .recipe-card {
+            background-color: white;
+            border-radius: 12px;
+            padding: 2rem;
+            box-shadow: 0 4px 16px rgba(0,0,0,0.06);
+            margin-bottom: 2rem;
+            transition: transform 0.2s;
+        }
+
+        .recipe-card:hover {
+            transform: translateY(-4px);
+        }
+
+        .recipe-link {
+            color: var(--brand-green);
+            display: inline-flex;
+            align-items: center;
+            font-weight: 500;
+            text-decoration: none;
+            padding: 0.5rem 0;
+        }
+
+        .recipe-link:hover {
+            text-decoration: underline;
+        }
+    </style>
+</head>
+<body>
+    <div class="hero">
+        <div class="container">
+            <div class="row align-items-center">
+                <div class="col-lg-6">
+                    <h1 class="display-4 fw-bold mb-4">Preserva tus recetas familiares</h1>
+                    <p class="lead mb-4">Convierte tus mensajes de voz en recetas bien organizadas</p>
+                    <a href="{{ whatsapp_link }}" class="whatsapp-button">
+                        Empieza ahora en WhatsApp
+                    </a>
+                </div>
+                <div class="col-lg-6">
+                    <img src="/static/logo.png" alt="Yayarecetas" class="img-fluid hero-image">
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <div class="steps-section">
+        <div class="container">
+            <h2 class="display-5 text-center mb-2">¿Cómo funciona?</h2>
+            <p class="text-center text-muted mb-5">Tres pasos sencillos para preservar tus recetas</p>
+            
+            <div class="row g-4">
+                <div class="col-md-4">
+                    <div class="step-card">
+                        <div class="step-icon">
+                            <span>🎙️</span>
+                        </div>
+                        <h3 class="h5 mb-3">1. Envía tu receta por voz</h3>
+                        <p class="text-muted mb-0">Graba un mensaje de voz con tu receta familiar favorita</p>
+                    </div>
+                </div>
+                <div class="col-md-4">
+                    <div class="step-card">
+                        <div class="step-icon">
+                            <span>✨</span>
+                        </div>
+                        <h3 class="h5 mb-3">2. Recibe tu receta bien ordenada</h3>
+                        <p class="text-muted mb-0">El bot organiza tu receta manteniendo el toque personal</p>
+                    </div>
+                </div>
+                <div class="col-md-4">
+                    <div class="step-card">
+                        <div class="step-icon">
+                            <span>💝</span>
+                        </div>
+                        <h3 class="h5 mb-3">3. Comparte y preserva</h3>
+                        <p class="text-muted mb-0">Guarda y comparte tus recetas familiares para siempre</p>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    {% if recent_recipes %}
+    <div class="recipes-section">
+        <div class="container">
+            <h2 class="display-5 text-center mb-5">Últimas recetas compartidas</h2>
+            <div class="row">
+                {% for recipe in recent_recipes %}
+                <div class="col-md-4">
+                    <div class="recipe-card">
+                        <h3 class="h5 mb-3">{{ recipe.title }}</h3>
+                        <p class="text-muted mb-3">{{ recipe.description }}</p>
+                        <a href="{{ recipe.url }}" class="recipe-link">Ver receta completa →</a>
+                    </div>
+                </div>
+                {% endfor %}
+            </div>
+        </div>
+    </div>
+    {% endif %}
+</body>
+</html> 

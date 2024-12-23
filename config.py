@@ -16,6 +16,8 @@ STRIPE_WEBHOOK_SECRET = os.getenv('STRIPE_WEBHOOK_SECRET')
 TWILIO_ACCOUNT_SID = os.getenv('TWILIO_ACCOUNT_SID')
 TWILIO_AUTH_TOKEN = os.getenv('TWILIO_AUTH_TOKEN')
 TWILIO_WHATSAPP_NUMBER = os.getenv('TWILIO_WHATSAPP_NUMBER')
+WELCOME_MESSAGE = "¡Hola! 👋 Me gustaria guardar una receta familiar. 👩‍🍳"
+WHATSAPP_LINK = f"https://api.whatsapp.com/send/?phone={TWILIO_WHATSAPP_NUMBER.replace('whatsapp:', '').replace('+', '')}&text={WELCOME_MESSAGE.replace(' ', '%20')}&type=phone_number&app_absent=0"
 
 #OPENAI
 OPENAI_API_KEY = os.getenv('OPENAI_API_KEY')

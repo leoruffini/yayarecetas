@@ -7,6 +7,7 @@ import stripe
 from fastapi import Depends, FastAPI, HTTPException, Request
 from fastapi.responses import JSONResponse, RedirectResponse, Response
 from fastapi.templating import Jinja2Templates
+from fastapi.staticfiles import StaticFiles
 from sqlalchemy.orm import Session
 import markdown2
 
@@ -19,7 +20,7 @@ from config import (
     TWILIO_ACCOUNT_SID, TWILIO_AUTH_TOKEN, OPENAI_API_KEY,
     TWILIO_WHATSAPP_NUMBER, LOG_LEVEL, MAX_WHATSAPP_MESSAGE_LENGTH,
     STRIPE_WEBHOOK_SECRET, STRIPE_API_KEY,
-    ADMIN_PHONE_NUMBER
+    ADMIN_PHONE_NUMBER, WHATSAPP_LINK
 )
 
 # Configure logging
@@ -31,7 +32,10 @@ logger = logging.getLogger(__name__)
 
 app = FastAPI()
 
-# Initialize Jinja2 templates
+# Mount static files directory
+app.mount("/static", StaticFiles(directory="static"), name="static")
+
+# Initialize templates
 templates = Jinja2Templates(directory="templates")
 
 # Add markdown filter to Jinja2
@@ -184,6 +188,28 @@ async def get_transcription_by_slug(
             "error_message": "An error occurred while retrieving the recipe",
             "title": "Error"
         })
+
+@app.get("/")
+@app.get("/home.html")
+async def home(request: Request):
+    recent_recipes = [
+        {
+            "title": "Tortilla de Patatas de la Abuela",
+            "description": "La clásica tortilla con el toque especial de la yaya",
+            "url": "/yaya123/tortilla-patatas-20240315"
+        },
+    ]
+    
+    print(f"Debug - WhatsApp Link being passed to template: {WHATSAPP_LINK}")
+    
+    return templates.TemplateResponse(
+        "home.html", 
+        {
+            "request": request, 
+            "recent_recipes": recent_recipes,
+            "whatsapp_link": WHATSAPP_LINK
+        }
+    )
 
 # Retrieve database info
 print(f"CONNECTED TO DATABASE: {DATABASE_URL}")
