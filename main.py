@@ -224,5 +224,52 @@ async def home(request: Request, db: Session = Depends(get_db)):
         }
     )
 
+@app.get("/yaya{user_id}")
+async def get_user_recipes(
+    user_id: int,
+    request: Request,
+    db: Session = Depends(get_db)
+):
+    recipes = []
+    if user_id == 1:
+        sample_recipes = get_sample_recipes()
+        for recipe in sample_recipes:
+            recipes.append({
+                "title": recipe["title"],
+                "url": f"/yaya1/{recipe['slug']}",
+                "created_at": recipe["created_at"]
+            })
+    else:
+        # Get user from database
+        user = db.query(User).filter(User.id == user_id).first()
+        if not user:
+            return templates.TemplateResponse("recipe_index.html", {
+                "request": request,
+                "recipes": [],
+                "error_message": "Usuario no encontrado",
+                "whatsapp_link": WHATSAPP_LINK
+            })
+
+        # Get all messages for this user
+        messages = db.query(Message)\
+            .filter(Message.phone_number == user.phone_number)\
+            .order_by(Message.created_at.desc())\
+            .all()
+
+        for message in messages:
+            first_line = message.text.splitlines()[0].replace('# ', '') if message.text else "Sin título"
+            recipes.append({
+                "title": first_line,
+                "url": f"/yaya{user_id}/{message.slug}",
+                "created_at": message.created_at
+            })
+
+    return templates.TemplateResponse("recipe_index.html", {
+        "request": request,
+        "recipes": recipes,
+        "error_message": None,
+        "whatsapp_link": WHATSAPP_LINK
+    })
+
 # Retrieve database info
 print(f"CONNECTED TO DATABASE: {DATABASE_URL}")

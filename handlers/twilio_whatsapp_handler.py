@@ -145,12 +145,14 @@ class TwilioWhatsAppHandler:
             
             # Generate URL using slug
             transcription_url = f"{self.base_url}/yaya{user_id}/{recipe_slug}"
+            user_recipes_url = f"{self.base_url}/yaya{user_id}"
             
             # Always send the web link first
             await self.send_templated_message(
                 to_number,
                 "long_transcription_initial",
-                transcription_url=transcription_url
+                transcription_url=transcription_url,
+                user_recipes_url=user_recipes_url
             )
             
             # Then send the transcription (either full or split)

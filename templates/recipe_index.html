@@ -1,0 +1,137 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Mis Recetas | Yayarecetas</title>
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.2/dist/css/bootstrap.min.css" rel="stylesheet">
+    <style>
+        :root {
+            --brand-pink: #F8D7D0;
+            --brand-pink-dark: #E5B3AA;
+            --brand-teal: #4A9B8F;
+            --brand-teal-dark: #3D7D73;
+            --brand-cream: #FFF5E9;
+            --brand-brown: #5C4B45;
+        }
+
+        body {
+            background-color: var(--brand-cream);
+            font-family: 'Segoe UI', system-ui, -apple-system, sans-serif;
+        }
+
+        .recipes-container {
+            max-width: 800px;
+            margin: 2rem auto;
+            padding: 0 1rem;
+        }
+
+        .header {
+            background: white;
+            padding: 1.5rem;
+            border-radius: 16px;
+            margin-bottom: 2rem;
+            box-shadow: 0 2px 8px rgba(0, 0, 0, 0.06);
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+        }
+
+        .recipe-card {
+            background: white;
+            border-radius: 16px;
+            box-shadow: 0 2px 8px rgba(0, 0, 0, 0.06);
+            padding: 1.5rem;
+            margin-bottom: 1rem;
+            transition: all 0.2s ease;
+        }
+
+        .recipe-card:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 4px 12px rgba(0,0,0,0.1);
+        }
+
+        .recipe-link {
+            color: inherit;
+            text-decoration: none;
+            display: block;
+        }
+
+        .recipe-link:hover {
+            color: inherit;
+        }
+
+        .recipe-title {
+            font-size: 1.4rem;
+            font-weight: 500;
+            color: var(--brand-brown);
+            margin-bottom: 0.75rem;
+        }
+
+        .recipe-date {
+            font-size: 0.9rem;
+            color: #666;
+            opacity: 0.8;
+        }
+
+        .btn-nueva-receta {
+            background-color: var(--brand-teal);
+            color: white;
+            padding: 0.75rem 1.5rem;
+            border-radius: 12px;
+            display: inline-flex;
+            align-items: center;
+            gap: 0.5rem;
+            transition: all 0.2s ease;
+            text-decoration: none;
+            font-size: 1rem;
+        }
+
+        .btn-nueva-receta:hover {
+            background-color: var(--brand-teal-dark);
+            color: white;
+            transform: translateY(-1px);
+        }
+    </style>
+</head>
+<body>
+    <div class="recipes-container">
+        <div class="header">
+            <h1 class="h3 mb-0">Mis Recetas</h1>
+            <a href="{{ whatsapp_link }}" class="btn-nueva-receta">
+                <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" fill="currentColor" viewBox="0 0 16 16">
+                    <path d="M8 0a1 1 0 0 1 1 1v6h6a1 1 0 1 1 0 2H9v6a1 1 0 1 1-2 0V9H1a1 1 0 0 1 0-2h6V1a1 1 0 0 1 1-1"/>
+                </svg>
+                Nueva Receta
+            </a>
+        </div>
+        
+        {% if error_message %}
+            <div class="error-message">
+                <h4>Lo sentimos</h4>
+                <p>{{ error_message }}</p>
+            </div>
+        {% else %}
+            {% if recipes %}
+                {% for recipe in recipes %}
+                    <a href="{{ recipe.url }}" class="recipe-link">
+                        <div class="recipe-card">
+                            <div class="recipe-title">{{ recipe.title }}</div>
+                            <div class="recipe-date">
+                                {{ recipe.created_at.strftime('%d/%m/%Y %H:%M') }}
+                            </div>
+                        </div>
+                    </a>
+                {% endfor %}
+            {% else %}
+                <div class="empty-state">
+                    <p>Aún no hay recetas guardadas</p>
+                    <a href="{{ whatsapp_link }}" class="btn-nueva-receta">
+                        Envía tu primera receta
+                    </a>
+                </div>
+            {% endif %}
+        {% endif %}
+    </div>
+</body>
+</html> 
