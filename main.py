@@ -22,6 +22,7 @@ from config import (
     STRIPE_WEBHOOK_SECRET, STRIPE_API_KEY,
     ADMIN_PHONE_NUMBER, WHATSAPP_LINK
 )
+from data.sample_data import get_sample_recipes
 
 # Configure logging
 logging.basicConfig(
@@ -125,6 +126,18 @@ async def get_transcription_by_slug(
     request: Request, 
     db: Session = Depends(get_db)
 ):
+    # First check if it's a sample recipe
+    sample_recipes = get_sample_recipes()
+    for recipe in sample_recipes:
+        if recipe["slug"] == recipe_slug:
+            return templates.TemplateResponse("transcript.html", {
+                "request": request,
+                "transcription": recipe["text"],
+                "error_message": None,
+                "title": recipe["title"]
+            })
+    
+    # If not a sample recipe, continue with database lookup
     logger.info(f"Attempting to retrieve recipe for user {user_id}: {recipe_slug}")
     
     # Extract date from slug (last 8 characters: YYYYMMDD)
@@ -191,16 +204,16 @@ async def get_transcription_by_slug(
 
 @app.get("/")
 @app.get("/home.html")
-async def home(request: Request):
-    recent_recipes = [
-        {
-            "title": "Tortilla de Patatas de la Abuela",
-            "description": "La clásica tortilla con el toque especial de la yaya",
-            "url": "/yaya123/tortilla-patatas-20240315"
-        },
-    ]
+async def home(request: Request, db: Session = Depends(get_db)):
+    sample_recipes = get_sample_recipes()
+    recent_recipes = []
     
-    print(f"Debug - WhatsApp Link being passed to template: {WHATSAPP_LINK}")
+    for recipe in sample_recipes:
+        recent_recipes.append({
+            "title": recipe["title"],
+            "description": recipe["description"],
+            "url": f"/yaya1/{recipe['slug']}"  # Using user_id 1 for sample data
+        })
     
     return templates.TemplateResponse(
         "home.html", 
