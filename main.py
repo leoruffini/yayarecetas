@@ -129,7 +129,9 @@ async def get_transcription_by_slug(
     # First check if it's a sample recipe
     sample_recipes = get_sample_recipes()
     for recipe in sample_recipes:
-        if recipe["slug"] == recipe_slug:
+        # Remove any potential number suffix for comparison
+        base_recipe_slug = recipe_slug.split('-', 1)[0]
+        if recipe["slug"] == base_recipe_slug:
             return templates.TemplateResponse("transcript.html", {
                 "request": request,
                 "transcription": recipe["text"],
@@ -205,14 +207,14 @@ async def get_transcription_by_slug(
 @app.get("/")
 @app.get("/home.html")
 async def home(request: Request, db: Session = Depends(get_db)):
-    sample_recipes = get_sample_recipes()
+    sample_recipes = get_sample_recipes(db)
     recent_recipes = []
     
     for recipe in sample_recipes:
         recent_recipes.append({
             "title": recipe["title"],
             "description": recipe["description"],
-            "url": f"/yaya1/{recipe['slug']}"  # Using user_id 1 for sample data
+            "url": f"/yaya{recipe['user_id']}/{recipe['slug']}"  # Use actual user_id
         })
     
     return templates.TemplateResponse(
