@@ -127,11 +127,9 @@ async def get_transcription_by_slug(
     db: Session = Depends(get_db)
 ):
     # First check if it's a sample recipe
-    sample_recipes = get_sample_recipes()
+    sample_recipes = get_sample_recipes(db)
     for recipe in sample_recipes:
-        # Remove any potential number suffix for comparison
-        base_recipe_slug = recipe_slug.split('-', 1)[0]
-        if recipe["slug"] == base_recipe_slug:
+        if recipe["slug"] == recipe_slug:
             return templates.TemplateResponse("transcript.html", {
                 "request": request,
                 "transcription": recipe["text"],
@@ -142,19 +140,6 @@ async def get_transcription_by_slug(
     # If not a sample recipe, continue with database lookup
     logger.info(f"Attempting to retrieve recipe for user {user_id}: {recipe_slug}")
     
-    # Extract date from slug (last 8 characters: YYYYMMDD)
-    try:
-        date_str = recipe_slug[-8:]
-        recipe_date = datetime.strptime(date_str, '%Y%m%d')
-        base_slug = recipe_slug[:-9]  # Remove -YYYYMMDD
-        
-        # Format title from base slug
-        display_title = base_slug.replace('-', ' ').title()
-    except ValueError:
-        logger.warning(f"Invalid recipe slug format: {recipe_slug}")
-        recipe_date = None
-        display_title = recipe_slug.replace('-', ' ').title()
-    
     try:
         # Get user from database
         user = db.query(User).filter(User.id == user_id).first()
@@ -162,31 +147,26 @@ async def get_transcription_by_slug(
             return templates.TemplateResponse("transcript.html", {
                 "request": request,
                 "transcription": None,
-                "error_message": "🚨 Error: User not found",
+                "error_message": "🚨 Error: Usuario no encontrado",
                 "title": "Error"
             })
             
-        # Get message for this user and date
-        query = db.query(Message)\
-            .filter(Message.phone_number == user.phone_number)
-            
-        if recipe_date:
-            # If we have a valid date, filter by date
-            next_day = recipe_date + timedelta(days=1)
-            query = query.filter(
-                Message.created_at >= recipe_date,
-                Message.created_at < next_day
-            )
-        
-        message = query.order_by(Message.created_at.desc()).first()
+        # Get message by slug
+        message = db.query(Message)\
+            .filter(Message.phone_number == user.phone_number)\
+            .filter(Message.slug == recipe_slug)\
+            .first()
             
         if not message:
             return templates.TemplateResponse("transcript.html", {
                 "request": request,
                 "transcription": None,
-                "error_message": "🚨 Error: Recipe not found",
+                "error_message": "🚨 Error: Receta no encontrada",
                 "title": "Error"
             })
+            
+        # Format title from slug
+        display_title = recipe_slug.replace('-', ' ').title()
             
         return templates.TemplateResponse("transcript.html", {
             "request": request,
@@ -200,7 +180,7 @@ async def get_transcription_by_slug(
         return templates.TemplateResponse("transcript.html", {
             "request": request,
             "transcription": None,
-            "error_message": "An error occurred while retrieving the recipe",
+            "error_message": "Ha ocurrido un error al recuperar la receta",
             "title": "Error"
         })
 
@@ -232,16 +212,7 @@ async def get_user_recipes(
     request: Request,
     db: Session = Depends(get_db)
 ):
-    recipes = []
-    if user_id == 1:
-        sample_recipes = get_sample_recipes()
-        for recipe in sample_recipes:
-            recipes.append({
-                "title": recipe["title"],
-                "url": f"/yaya1/{recipe['slug']}",
-                "created_at": recipe["created_at"]
-            })
-    else:
+    try:
         # Get user from database
         user = db.query(User).filter(User.id == user_id).first()
         if not user:
@@ -258,6 +229,7 @@ async def get_user_recipes(
             .order_by(Message.created_at.desc())\
             .all()
 
+        recipes = []
         for message in messages:
             first_line = message.text.splitlines()[0].replace('# ', '') if message.text else "Sin título"
             recipes.append({
@@ -266,12 +238,21 @@ async def get_user_recipes(
                 "created_at": message.created_at
             })
 
-    return templates.TemplateResponse("recipe_index.html", {
-        "request": request,
-        "recipes": recipes,
-        "error_message": None,
-        "whatsapp_link": WHATSAPP_LINK
-    })
+        return templates.TemplateResponse("recipe_index.html", {
+            "request": request,
+            "recipes": recipes,
+            "error_message": None,
+            "whatsapp_link": WHATSAPP_LINK
+        })
+        
+    except Exception as e:
+        logger.error(f"Error retrieving recipes for user {user_id}: {str(e)}")
+        return templates.TemplateResponse("recipe_index.html", {
+            "request": request,
+            "recipes": [],
+            "error_message": "Ha ocurrido un error al recuperar las recetas",
+            "whatsapp_link": WHATSAPP_LINK
+        })
 
 # Retrieve database info
 print(f"CONNECTED TO DATABASE: {DATABASE_URL}")
