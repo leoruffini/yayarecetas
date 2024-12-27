@@ -1,6 +1,7 @@
 import logging
 import uuid
 from datetime import datetime, timezone
+import re
 
 from openai import OpenAI
 from fastapi import HTTPException, Request
@@ -127,8 +128,25 @@ class TwilioWhatsAppHandler:
             user = self.user_manager.get_user_by_phone(to_number)
             user_id = user.id if user else '0'
             
-            # Get recipe slug
-            recipe_slug = self.get_recipe_slug(transcription, datetime.now(timezone.utc))
+            # Get base recipe slug
+            base_slug = self.get_recipe_slug(transcription, datetime.now(timezone.utc))
+            
+            # Query existing slugs that start with this base_slug
+            existing_slugs = db.query(Message.slug)\
+                .filter(Message.slug.like(f"{base_slug}%"))\
+                .all()
+            
+            # Determine final slug
+            if not existing_slugs:
+                recipe_slug = base_slug
+            else:
+                # Find the highest number and increment
+                max_number = 0
+                for slug in existing_slugs:
+                    match = re.search(r'-(\d+)$', slug[0])
+                    if match:
+                        max_number = max(max_number, int(match.group(1)))
+                recipe_slug = f"{base_slug}-{max_number + 1}"
             
             # Create message record
             db_message = Message(
@@ -260,13 +278,15 @@ class TwilioWhatsAppHandler:
         return parts
 
     def get_recipe_slug(self, transcription: str, created_at: datetime) -> str:
-        """Extract recipe name from transcription and convert to URL-friendly slug with timestamp"""
+        """Extract recipe name from transcription and convert to URL-friendly slug"""
         try:
             import unicodedata
             import re
             
             # Find the first line that starts with # (recipe title)
             lines = transcription.split('\n')
+            base_slug = "untitled-recipe"
+            
             for line in lines:
                 if line.startswith('# '):
                     # Remove the # and trim whitespace
@@ -279,14 +299,11 @@ class TwilioWhatsAppHandler:
                     # Replace spaces and invalid characters with hyphens
                     title = re.sub(r'[^\w\s-]', '', title)  # Remove special characters
                     title = re.sub(r'[-\s]+', '-', title)   # Replace spaces with single hyphen
-                    title = title.strip('-')                 # Remove leading/trailing hyphens
+                    base_slug = title.strip('-')            # Remove leading/trailing hyphens
+                    break
                     
-                    # Add timestamp to make the slug unique (YYYYMMDDHHmmss)
-                    timestamp = created_at.strftime('%Y%m%d%H%M%S')
-                    return f"{title}-{timestamp}"
-                
-            return f"untitled-recipe-{created_at.strftime('%Y%m%d%H%M%S')}"
+            return base_slug
             
         except Exception as e:
             self.logger.error(f"Error creating recipe slug: {str(e)}")
-            return f"untitled-recipe-{created_at.strftime('%Y%m%d%H%M%S')}"
+            return "untitled-recipe"
