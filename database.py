@@ -1,4 +1,4 @@
-from sqlalchemy import create_engine, Column, Integer, String, DateTime, ARRAY, Float, LargeBinary
+from sqlalchemy import create_engine, Column, Integer, String, DateTime, ARRAY, Float, LargeBinary, Boolean
 from sqlalchemy.ext.declarative import declarative_base
 from sqlalchemy.orm import sessionmaker
 from sqlalchemy.sql import func
@@ -29,11 +29,12 @@ class Message(Base):
 
     id = Column(Integer, primary_key=True, index=True)
     phone_number = Column(String, index=True)
-    encrypted_text = Column(LargeBinary)  # Changed from text to encrypted_text
+    encrypted_text = Column(LargeBinary)
     embedding = Column(ARRAY(Float))
     created_at = Column(DateTime, default=lambda: datetime.now(timezone.utc))
-    hash = Column(String, index=True, nullable=True)  # Keep for backward compatibility
-    slug = Column(String, index=True, nullable=True)  # New column for clean URLs
+    hash = Column(String, unique=True, index=True, nullable=True)
+    slug = Column(String, index=True, nullable=True)
+    is_private = Column(Boolean, default=False, nullable=False)
 
     @property
     def text(self):

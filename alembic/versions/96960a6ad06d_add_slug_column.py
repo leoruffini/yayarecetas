@@ -1,6 +1,6 @@
 """add slug column for clean urls
 
-Revision ID: xxxxxxxxxxxx
+Revision ID: 96960a6ad06d
 Revises: 7b97dc3e8e4c
 Create Date: 2024-03-15 ...
 
@@ -12,7 +12,7 @@ import sqlalchemy as sa
 
 
 # revision identifiers, used by Alembic.
-revision: str = 'xxxxxxxxxxxx'
+revision: str = '96960a6ad06d'
 down_revision: Union[str, None] = '7b97dc3e8e4c'
 branch_labels: Union[str, Sequence[str], None] = None
 depends_on: Union[str, Sequence[str], None] = None
