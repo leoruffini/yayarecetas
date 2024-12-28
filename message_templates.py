@@ -17,7 +17,12 @@ MESSAGE_TEMPLATES = {
     "long_transcription_summary": "```[RECETA ORGANIZADA CON YAYARECETAS 👩‍🍳]```\n\n{summary}\n\n--------------\n```¿TE GUSTÓ ESTA RECETA? ¡PRUEBA YAYARECETAS! https://bit.ly/Yayarecetas\u200B```",
     "split_transcription_initial": "Te la paso en {total_parts} partes:",
     "split_transcription_part": "Parte {part_number}/{total_parts}:\n\n{transcription}",
-    "ai_response": "{response}"
+    "ai_response": "{response}",
+    "verification_code": """🔐 Tu código de verificación para Yayarecetas es:
+
+*{code}*
+
+Este código expira en 5 minutos.""",
 }
 
 def get_message_template(template_key: str) -> str:

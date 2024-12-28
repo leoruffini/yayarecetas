@@ -1,0 +1,49 @@
+{% extends "base.html" %}
+
+{% block content %}
+<div class="container">
+    <div class="verification-container">
+        <h2 class="text-center mb-4">Verifica tu número</h2>
+        <p class="text-center mb-4">
+            Te hemos enviado un código de verificación por WhatsApp
+        </p>
+        
+        {% if error %}
+        <div class="alert alert-danger">
+            {{ error }}
+        </div>
+        {% endif %}
+        
+        <form method="POST" action="/verify/{{ user_id }}/{{ recipe_slug }}" class="verification-form">
+            <div class="mb-3">
+                <input type="text" 
+                       name="code" 
+                       class="form-control form-control-lg text-center"
+                       placeholder="Código de 6 dígitos"
+                       pattern="\d{6}"
+                       maxlength="6"
+                       required>
+            </div>
+            <button type="submit" class="btn btn-primary w-100">
+                Verificar
+            </button>
+        </form>
+    </div>
+</div>
+
+<style>
+.verification-container {
+    max-width: 400px;
+    margin: 4rem auto;
+    padding: 2rem;
+    background: white;
+    border-radius: 16px;
+    box-shadow: 0 2px 8px rgba(0, 0, 0, 0.06);
+}
+
+.verification-form input {
+    font-size: 24px;
+    letter-spacing: 0.2em;
+}
+</style>
+{% endblock %} 

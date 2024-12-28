@@ -10,6 +10,7 @@ from fastapi.templating import Jinja2Templates
 from fastapi.staticfiles import StaticFiles
 from sqlalchemy.orm import Session
 import markdown2
+from starlette.middleware.sessions import SessionMiddleware
 
 # Local imports
 from handlers.stripe_handler import StripeHandler
@@ -23,6 +24,7 @@ from config import (
     ADMIN_PHONE_NUMBER, WHATSAPP_LINK
 )
 from data.sample_data import get_sample_recipes
+from handlers.auth_handler import AuthHandler
 
 # Configure logging
 logging.basicConfig(
@@ -68,6 +70,9 @@ logger.info(f"DEBUG MODE: {LOG_LEVEL}")
 # Initialize StripeHandler with TwilioWhatsAppHandler
 twilio_whatsapp_handler = TwilioWhatsAppHandler(get_db())
 stripe_handler = StripeHandler(twilio_handler=twilio_whatsapp_handler)
+
+# Add this near the top of main.py with other initializations
+auth_handler = AuthHandler()
 
 @app.post("/create-checkout-session")
 async def create_checkout_session():
@@ -120,59 +125,30 @@ async def cancel(request: Request):
     return templates.TemplateResponse("cancel.html", {"request": request})
 
 @app.get("/yaya{user_id}/{recipe_slug}")
-async def get_transcription_by_slug(
-    user_id: int, 
-    recipe_slug: str, 
-    request: Request, 
+async def get_recipe(
+    user_id: int,
+    recipe_slug: str,
+    request: Request,
     db: Session = Depends(get_db)
 ):
-    # First check if it's a sample recipe
-    sample_recipes = get_sample_recipes(db)
-    for recipe in sample_recipes:
-        if recipe["slug"] == recipe_slug:
-            return templates.TemplateResponse("transcript.html", {
-                "request": request,
-                "transcription": recipe["text"],
-                "error_message": None,
-                "title": recipe["title"]
-            })
-    
-    # If not a sample recipe, continue with database lookup
-    logger.info(f"Attempting to retrieve recipe for user {user_id}: {recipe_slug}")
-    
     try:
-        # Get user from database
-        user = db.query(User).filter(User.id == user_id).first()
-        if not user:
-            return templates.TemplateResponse("transcript.html", {
-                "request": request,
-                "transcription": None,
-                "error_message": "🚨 Error: Usuario no encontrado",
-                "title": "Error"
-            })
-            
-        # Get message by slug
-        message = db.query(Message)\
-            .filter(Message.phone_number == user.phone_number)\
-            .filter(Message.slug == recipe_slug)\
-            .first()
-            
+        message = db.query(Message).filter(Message.slug == recipe_slug).first()
         if not message:
             return templates.TemplateResponse("transcript.html", {
                 "request": request,
-                "transcription": None,
-                "error_message": "🚨 Error: Receta no encontrada",
-                "title": "Error"
+                "error_message": "Receta no encontrada",
+                "user_id": user_id,
+                "recipe_slug": recipe_slug,
+                "whatsapp_link": WHATSAPP_LINK
             })
-            
-        # Format title from slug
-        display_title = recipe_slug.replace('-', ' ').title()
-            
+
         return templates.TemplateResponse("transcript.html", {
             "request": request,
             "transcription": message.text,
+            "user_id": user_id,
+            "recipe_slug": recipe_slug,
             "error_message": None,
-            "title": display_title
+            "whatsapp_link": WHATSAPP_LINK
         })
         
     except Exception as e:
@@ -181,7 +157,7 @@ async def get_transcription_by_slug(
             "request": request,
             "transcription": None,
             "error_message": "Ha ocurrido un error al recuperar la receta",
-            "title": "Error"
+            "whatsapp_link": WHATSAPP_LINK
         })
 
 @app.get("/")
@@ -254,5 +230,144 @@ async def get_user_recipes(
             "whatsapp_link": WHATSAPP_LINK
         })
 
+@app.get("/edit/{user_id}/{recipe_slug}")
+async def edit_recipe_page(
+    user_id: int,
+    recipe_slug: str,
+    request: Request,
+    db: Session = Depends(get_db)
+):
+    try:
+        # Get recipe from database
+        message = db.query(Message).filter(Message.slug == recipe_slug).first()
+        if not message:
+            raise HTTPException(status_code=404, detail="Recipe not found")
+            
+        # Check if user is verified (implement session handling)
+        is_verified = request.session.get(f"verified_{user_id}", False)
+        
+        if not is_verified:
+            # Redirect to verification page
+            return RedirectResponse(
+                f"/verify/{user_id}/{recipe_slug}",
+                status_code=302
+            )
+            
+        return templates.TemplateResponse("edit_recipe.html", {
+            "request": request,
+            "recipe_text": message.text,
+            "user_id": user_id,
+            "recipe_slug": recipe_slug,
+            "error_message": None
+        })
+        
+    except Exception as e:
+        logger.error(f"Error loading edit page: {str(e)}")
+        return templates.TemplateResponse("edit_recipe.html", {
+            "request": request,
+            "recipe_text": "",
+            "user_id": user_id,
+            "recipe_slug": recipe_slug,
+            "error_message": "Error cargando la receta"
+        })
+
+@app.post("/edit/{user_id}/{recipe_slug}")
+async def update_recipe(
+    user_id: int,
+    recipe_slug: str,
+    request: Request,
+    db: Session = Depends(get_db)
+):
+    try:
+        form = await request.form()
+        recipe_text = form.get("recipe_text")
+        
+        # Verify user ownership
+        message = db.query(Message).filter(Message.slug == recipe_slug).first()
+        if not message:
+            raise HTTPException(status_code=404, detail="Recipe not found")
+            
+        # Update recipe
+        message.text = recipe_text
+        db.commit()
+        
+        # Redirect to view page
+        return RedirectResponse(
+            f"/yaya{user_id}/{recipe_slug}",
+            status_code=302
+        )
+        
+    except Exception as e:
+        logger.error(f"Error updating recipe: {str(e)}")
+        return templates.TemplateResponse("edit_recipe.html", {
+            "request": request,
+            "recipe_text": recipe_text,
+            "user_id": user_id,
+            "recipe_slug": recipe_slug,
+            "error_message": "Error guardando los cambios"
+        })
+
+@app.get("/verify/{user_id}/{recipe_slug}")
+async def verify_page(
+    user_id: int,
+    recipe_slug: str,
+    request: Request,
+    db: Session = Depends(get_db)
+):
+    try:
+        # Generate and send verification code
+        code = auth_handler.generate_verification_code()
+        request.session[f"pending_code_{user_id}"] = code
+        
+        # Get user from database
+        message = db.query(Message).filter(Message.slug == recipe_slug).first()
+        if not message:
+            raise HTTPException(status_code=404, detail="Recipe not found")
+            
+        # Send verification code via WhatsApp
+        await auth_handler.send_verification_code(user_id, code, db)
+        
+        return templates.TemplateResponse("verify.html", {
+            "request": request,
+            "error": None,
+            "user_id": user_id,
+            "recipe_slug": recipe_slug
+        })
+        
+    except Exception as e:
+        logger.error(f"Error in verification page: {str(e)}")
+        return templates.TemplateResponse("verify.html", {
+            "request": request,
+            "error": "Error al enviar el código de verificación",
+            "user_id": user_id,
+            "recipe_slug": recipe_slug
+        })
+
+@app.post("/verify/{user_id}/{recipe_slug}")
+async def verify_code(
+    user_id: int,
+    recipe_slug: str,
+    request: Request,
+    db: Session = Depends(get_db)
+):
+    form = await request.form()
+    submitted_code = form.get("code")
+    stored_code = request.session.get(f"pending_code_{user_id}")
+    
+    if submitted_code == stored_code:
+        request.session[f"verified_{user_id}"] = True
+        return RedirectResponse(f"/edit/{user_id}/{recipe_slug}", status_code=302)
+    else:
+        return templates.TemplateResponse("verify.html", {
+            "request": request,
+            "error": "Código incorrecto"
+        })
+
 # Retrieve database info
 print(f"CONNECTED TO DATABASE: {DATABASE_URL}")
+
+# Add session middleware
+app.add_middleware(
+    SessionMiddleware,
+    secret_key="your-secret-key"  # Use environment variable in production
+)

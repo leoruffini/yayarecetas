@@ -13,3 +13,4 @@ alembic
 stripe
 cryptography
 markdown2
+itsdangerous  # For session handling
