@@ -1,6 +1,7 @@
 # Standard library imports
 import logging
 from datetime import datetime, timedelta
+from cachetools import TTLCache
 
 # Third-party imports
 import stripe
@@ -75,6 +76,9 @@ stripe_handler = StripeHandler(twilio_handler=twilio_whatsapp_handler)
 auth_handler = AuthHandler()
 
 RATE_LIMIT_WINDOW = timedelta(minutes=5)
+
+# Create a cache that expires entries after 5 minutes
+verification_cache = TTLCache(maxsize=100, ttl=300)  # 300 seconds = 5 minutes
 
 @app.post("/create-checkout-session")
 async def create_checkout_session():
@@ -338,37 +342,32 @@ async def verify_page(
     db: Session = Depends(get_db)
 ):
     try:
-        # Check last attempt time from session
-        last_attempt = request.session.get(f"last_attempt_{user_id}")
-        current_time = datetime.now()
-        
-        if last_attempt:
-            time_since_last = current_time - datetime.fromisoformat(last_attempt)
-            logger.info(f"User {user_id} requesting verification. Time since last attempt: {time_since_last}")
+        # Get user's phone number
+        user = db.query(User).filter(User.id == user_id).first()
+        if not user:
+            raise HTTPException(status_code=404, detail="User not found")
             
-            if time_since_last < RATE_LIMIT_WINDOW:
-                logger.info(f"Rate limit active for user {user_id}. Skipping code send.")
-                return templates.TemplateResponse("verify.html", {
-                    "request": request,
-                    "error": None,
-                    "user_id": user_id,
-                    "recipe_slug": recipe_slug
-                })
-        else:
-            logger.info(f"First verification attempt for user {user_id}")
+        # Use phone number as cache key
+        cache_key = user.phone_number
         
-        # Generate and send verification code
+        if cache_key in verification_cache:
+            logger.info(f"Rate limit active for user {user_id}. Skipping code send.")
+            return templates.TemplateResponse("verify.html", {
+                "request": request,
+                "error": None,
+                "user_id": user_id,
+                "recipe_slug": recipe_slug
+            })
+            
+        logger.info(f"Sending verification code to user {user_id}")
+        
+        # Generate and send code
         code = auth_handler.generate_verification_code()
         request.session[f"pending_code_{user_id}"] = code
-        request.session[f"last_attempt_{user_id}"] = current_time.isoformat()
         
-        logger.info(f"Sending new verification code to user {user_id}")
+        # Add to rate limit cache
+        verification_cache[cache_key] = datetime.now()
         
-        # Get user and send code
-        message = db.query(Message).filter(Message.slug == recipe_slug).first()
-        if not message:
-            raise HTTPException(status_code=404, detail="Recipe not found")
-            
         await auth_handler.send_verification_code(user_id, code, db)
         
         return templates.TemplateResponse("verify.html", {
