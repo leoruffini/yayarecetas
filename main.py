@@ -144,13 +144,25 @@ async def get_recipe(
                 "whatsapp_link": WHATSAPP_LINK
             })
 
+        # Check if recipe is private and user is not verified
+        is_verified = request.session.get(f"verified_{user_id}", False)
+        if message.is_private and not is_verified:
+            return templates.TemplateResponse("transcript.html", {
+                "request": request,
+                "error_message": "Esta receta es privada. Para verla, necesitas verificar que eres el propietario.",
+                "user_id": user_id,
+                "recipe_slug": recipe_slug,
+                "whatsapp_link": WHATSAPP_LINK
+            })
+
         return templates.TemplateResponse("transcript.html", {
             "request": request,
             "transcription": message.text,
             "user_id": user_id,
             "recipe_slug": recipe_slug,
             "error_message": None,
-            "whatsapp_link": WHATSAPP_LINK
+            "whatsapp_link": WHATSAPP_LINK,
+            "is_private": message.is_private
         })
         
     except Exception as e:
@@ -202,10 +214,14 @@ async def get_user_recipes(
             })
 
         # Get all messages for this user
-        messages = db.query(Message)\
-            .filter(Message.phone_number == user.phone_number)\
-            .order_by(Message.created_at.desc())\
-            .all()
+        is_verified = request.session.get(f"verified_{user_id}", False)
+        messages_query = db.query(Message)\
+            .filter(Message.phone_number == user.phone_number)
+
+        if not is_verified:
+            messages_query = messages_query.filter(Message.is_private == False)
+
+        messages = messages_query.order_by(Message.created_at.desc()).all()
 
         recipes = []
         for message in messages:

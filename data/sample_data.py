@@ -16,8 +16,9 @@ def get_sample_recipes(db: Session = None) -> list:
             }
         ]
     
-    # Get latest 3 recipes from database with their users
+    # Get latest 3 public recipes from database with their users
     latest_recipes = db.query(Message, Message.phone_number)\
+        .filter(Message.is_private == False)\
         .order_by(Message.created_at.desc())\
         .limit(3)\
         .all()
