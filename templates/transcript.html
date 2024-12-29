@@ -133,20 +133,22 @@
         .recipe-status {
             display: inline-flex;
             align-items: center;
-            gap: 0.5rem;
-            padding: 0.5rem 1rem;
-            border-radius: 8px;
+            gap: 0.25rem;
+            padding: 0.25rem 0.75rem;
+            border-radius: 6px;
             margin-bottom: 1rem;
             background-color: #f8f9fa;
         }
 
         .recipe-status svg {
-            margin-right: 0.5rem;
+            width: 14px;
+            height: 14px;
+            margin-right: 0.25rem;
         }
 
         .recipe-status span {
-            font-size: 0.875rem;
-            font-weight: 600;
+            font-size: 0.8rem;
+            font-weight: 500;
             color: #333;
         }
 
@@ -178,6 +180,16 @@
             </div>
         {% else %}
             <div class="recipe-card">
+                <!-- Recipe Status -->
+                {% if is_private %}
+                    <div class="recipe-status private">
+                        <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" fill="currentColor" viewBox="0 0 16 16">
+                            <path d="M8 1a2 2 0 0 1 2 2v4H6V3a2 2 0 0 1 2-2zm3 6V3a3 3 0 0 0-6 0v4a2 2 0 0 0-2 2v5a2 2 0 0 0 2 2h6a2 2 0 0 0 2-2V9a2 2 0 0 0-2-2z"/>
+                        </svg>
+                        <span>Receta Privada</span>
+                    </div>
+                {% endif %}
+
                 {% if transcription %}
                     {% set first_h1 = True %}
                     {% for line in transcription.split('\n') %}
@@ -216,16 +228,6 @@
                     {% endif %}
                 {% endif %}
                 
-                <!-- Recipe Status -->
-                {% if is_private %}
-                    <div class="recipe-status private">
-                        <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" fill="currentColor" viewBox="0 0 16 16">
-                            <path d="M8 1a2 2 0 0 1 2 2v4H6V3a2 2 0 0 1 2-2zm3 6V3a3 3 0 0 0-6 0v4a2 2 0 0 0-2 2v5a2 2 0 0 0 2 2h6a2 2 0 0 0 2-2V9a2 2 0 0 0-2-2z"/>
-                        </svg>
-                        <span>Receta Privada</span>
-                    </div>
-                {% endif %}
-
                 <!-- Subscription Message -->
                 <div class="subscription-message">
                     <h3>¡Suscríbete a nuestro servicio premium!</h3>

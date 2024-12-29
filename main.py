@@ -261,7 +261,7 @@ async def edit_recipe_page(
         if not message:
             raise HTTPException(status_code=404, detail="Recipe not found")
             
-        # Check if user is verified (implement session handling)
+        # Check if user is verified
         is_verified = request.session.get(f"verified_{user_id}", False)
         
         if not is_verified:
@@ -274,6 +274,7 @@ async def edit_recipe_page(
         return templates.TemplateResponse("edit_recipe.html", {
             "request": request,
             "recipe_text": message.text,
+            "is_private": message.is_private,
             "user_id": user_id,
             "recipe_slug": recipe_slug,
             "error_message": None
@@ -284,6 +285,7 @@ async def edit_recipe_page(
         return templates.TemplateResponse("edit_recipe.html", {
             "request": request,
             "recipe_text": "",
+            "is_private": False,
             "user_id": user_id,
             "recipe_slug": recipe_slug,
             "error_message": "Error cargando la receta"
@@ -299,14 +301,25 @@ async def update_recipe(
     try:
         form = await request.form()
         recipe_text = form.get("recipe_text")
+        is_private = form.get("is_private") == "true"  # Checkbox value
         
-        # Verify user ownership
+        # Get recipe from database
         message = db.query(Message).filter(Message.slug == recipe_slug).first()
         if not message:
             raise HTTPException(status_code=404, detail="Recipe not found")
             
+        # Check if user is verified
+        is_verified = request.session.get(f"verified_{user_id}", False)
+        if not is_verified:
+            # Redirect to verification page
+            return RedirectResponse(
+                f"/verify/{user_id}/{recipe_slug}",
+                status_code=302
+            )
+        
         # Update recipe
         message.text = recipe_text
+        message.is_private = is_private
         db.commit()
         
         # Redirect to view page
@@ -320,6 +333,7 @@ async def update_recipe(
         return templates.TemplateResponse("edit_recipe.html", {
             "request": request,
             "recipe_text": recipe_text,
+            "is_private": is_private,
             "user_id": user_id,
             "recipe_slug": recipe_slug,
             "error_message": "Error guardando los cambios"

@@ -24,6 +24,21 @@
                     Usa el formato Markdown. Los títulos empiezan con #, los ingredientes con -, etc.
                 </div>
             </div>
+
+            <div class="mb-3 form-check">
+                <input type="checkbox" 
+                       class="form-check-input" 
+                       id="is_private" 
+                       name="is_private" 
+                       value="true"
+                       {% if is_private %}checked{% endif %}>
+                <label class="form-check-label" for="is_private">
+                    Receta Privada
+                </label>
+                <div class="form-text">
+                    Las recetas privadas solo son visibles para ti
+                </div>
+            </div>
             
             <div class="d-flex justify-content-between">
                 <a href="/yaya{{ user_id }}/{{ recipe_slug }}" class="btn btn-secondary">
