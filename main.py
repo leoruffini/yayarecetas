@@ -127,7 +127,7 @@ async def cancel(request: Request):
     return templates.TemplateResponse("cancel.html", {"request": request})
 
 @app.get("/yaya{user_id}/{recipe_slug}")
-async def get_recipe(
+async def get_transcription(
     user_id: int,
     recipe_slug: str,
     request: Request,
@@ -136,42 +136,33 @@ async def get_recipe(
     try:
         message = db.query(Message).filter(Message.slug == recipe_slug).first()
         if not message:
-            return templates.TemplateResponse("transcript.html", {
-                "request": request,
-                "error_message": "Receta no encontrada",
-                "user_id": user_id,
-                "recipe_slug": recipe_slug,
-                "whatsapp_link": WHATSAPP_LINK
-            })
-
-        # Check if recipe is private and user is not verified
-        is_verified = request.session.get(f"verified_{user_id}", False)
-        if message.is_private and not is_verified:
-            return templates.TemplateResponse("transcript.html", {
-                "request": request,
-                "error_message": "Esta receta es privada. Para verla, necesitas verificar que eres el propietario.",
-                "user_id": user_id,
-                "recipe_slug": recipe_slug,
-                "whatsapp_link": WHATSAPP_LINK
-            })
-
+            raise HTTPException(status_code=404, detail="Recipe not found")
+            
+        if message.is_private:
+            is_verified = request.session.get(f"verified_{user_id}", False)
+            if not is_verified:
+                return templates.TemplateResponse("transcript.html", {
+                    "request": request,
+                    "error_message": "Esta es una receta privada. Para verla, necesitas verificar que eres el propietario.",
+                    "user_id": user_id,
+                    "recipe_slug": recipe_slug
+                })
+        
         return templates.TemplateResponse("transcript.html", {
             "request": request,
             "transcription": message.text,
+            "is_private": message.is_private,
             "user_id": user_id,
             "recipe_slug": recipe_slug,
-            "error_message": None,
-            "whatsapp_link": WHATSAPP_LINK,
-            "is_private": message.is_private
+            "hash": message.hash,
+            "error_message": None
         })
-        
+            
     except Exception as e:
-        logger.error(f"Error retrieving recipe for user {user_id} - {recipe_slug}: {str(e)}")
+        logger.error(f"Error getting transcription: {str(e)}")
         return templates.TemplateResponse("transcript.html", {
             "request": request,
-            "transcription": None,
-            "error_message": "Ha ocurrido un error al recuperar la receta",
-            "whatsapp_link": WHATSAPP_LINK
+            "error_message": "Error cargando la receta"
         })
 
 @app.get("/")
@@ -415,6 +406,24 @@ async def verify_code(
             "request": request,
             "error": "Código incorrecto"
         })
+
+@app.get("/shared/{hash}")
+async def view_shared_recipe(
+    hash: str,
+    request: Request,
+    db: Session = Depends(get_db)
+):
+    # Get recipe by hash
+    message = db.query(Message).filter(Message.hash == hash).first()
+    if not message:
+        raise HTTPException(status_code=404, detail="Recipe not found")
+        
+    return templates.TemplateResponse("transcript.html", {
+        "request": request,
+        "transcription": message.text,
+        "is_shared": True,
+        "error_message": None
+    })
 
 # Retrieve database info
 print(f"CONNECTED TO DATABASE: {DATABASE_URL}")
