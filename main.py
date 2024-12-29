@@ -74,6 +74,8 @@ stripe_handler = StripeHandler(twilio_handler=twilio_whatsapp_handler)
 # Add this near the top of main.py with other initializations
 auth_handler = AuthHandler()
 
+RATE_LIMIT_WINDOW = timedelta(minutes=5)
+
 @app.post("/create-checkout-session")
 async def create_checkout_session():
     return stripe_handler.create_checkout_session()
@@ -315,16 +317,37 @@ async def verify_page(
     db: Session = Depends(get_db)
 ):
     try:
+        # Check last attempt time from session
+        last_attempt = request.session.get(f"last_attempt_{user_id}")
+        current_time = datetime.now()
+        
+        if last_attempt:
+            time_since_last = current_time - datetime.fromisoformat(last_attempt)
+            logger.info(f"User {user_id} requesting verification. Time since last attempt: {time_since_last}")
+            
+            if time_since_last < RATE_LIMIT_WINDOW:
+                logger.info(f"Rate limit active for user {user_id}. Skipping code send.")
+                return templates.TemplateResponse("verify.html", {
+                    "request": request,
+                    "error": None,
+                    "user_id": user_id,
+                    "recipe_slug": recipe_slug
+                })
+        else:
+            logger.info(f"First verification attempt for user {user_id}")
+        
         # Generate and send verification code
         code = auth_handler.generate_verification_code()
         request.session[f"pending_code_{user_id}"] = code
+        request.session[f"last_attempt_{user_id}"] = current_time.isoformat()
         
-        # Get user from database
+        logger.info(f"Sending new verification code to user {user_id}")
+        
+        # Get user and send code
         message = db.query(Message).filter(Message.slug == recipe_slug).first()
         if not message:
             raise HTTPException(status_code=404, detail="Recipe not found")
             
-        # Send verification code via WhatsApp
         await auth_handler.send_verification_code(user_id, code, db)
         
         return templates.TemplateResponse("verify.html", {
