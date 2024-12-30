@@ -307,6 +307,7 @@
                             style="border: none; cursor: pointer;"
                             data-bs-toggle="tooltip" 
                             data-bs-placement="top"
+                            data-is-private="{% if is_private %}true{% else %}false{% endif %}"
                             title="{% if is_private %}El enlace privado es único y seguro para compartir tu receta{% endif %}">
                         <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" fill="currentColor" viewBox="0 0 16 16">
                             <path d="M13.5 1a1.5 1.5 0 1 0 0 3 1.5 1.5 0 0 0 0-3zM11 2.5a2.5 2.5 0 1 1 .603 1.628l-6.718 3.12a2.499 2.499 0 0 1 0 1.504l6.718 3.12a2.5 2.5 0 1 1-.488.876l-6.718-3.12a2.5 2.5 0 1 1 0-3.256l6.718-3.12A2.5 2.5 0 0 1 11 2.5z"/>
@@ -330,7 +331,7 @@
     function copyShareLink() {
         var copyText = document.getElementById("shareUrl");
         var button = document.getElementById("shareButton");
-        var isPrivate = {{ 'true' if is_private else 'false' }};
+        var isPrivate = button.getAttribute('data-is-private') === 'true';
         
         // Create temporary textarea
         var textarea = document.createElement("textarea");
