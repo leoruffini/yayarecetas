@@ -64,9 +64,38 @@
             background-color: var(--brand-teal-dark);
             border-color: var(--brand-teal-dark);
         }
+        
+        .navbar {
+            background-color: white;
+            box-shadow: 0 2px 8px rgba(0, 0, 0, 0.06);
+            padding: 1rem;
+        }
+        
+        .navbar-brand {
+            color: var(--brand-brown);
+            font-weight: 500;
+        }
+        
+        .nav-link {
+            color: var(--brand-teal);
+        }
     </style>
 </head>
 <body>
+    <nav class="navbar navbar-expand-lg">
+        <div class="container">
+            <a class="navbar-brand" href="/">Yayarecetas</a>
+            <div class="ms-auto">
+                {% if request.session.get('user_id') %}
+                    <a href="/recipes" class="nav-link d-inline-block me-3">Mis Recetas</a>
+                    <a href="/logout" class="nav-link d-inline-block">Cerrar Sesión</a>
+                {% else %}
+                    <a href="/login" class="nav-link">Identificarse</a>
+                {% endif %}
+            </div>
+        </div>
+    </nav>
+    
     {% block content %}{% endblock %}
     
     <!-- Bootstrap JS -->

@@ -201,9 +201,69 @@
             padding: 0 1rem;
             margin-bottom: 2rem;
         }
+
+        .navbar {
+            background-color: white;
+            box-shadow: 0 2px 8px rgba(0,0,0,0.08);
+            padding: 1rem;
+            position: fixed;
+            width: 100%;
+            z-index: 1030;
+            transition: all 0.3s ease;
+        }
+
+        .navbar .container {
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+        }
+
+        .navbar-brand {
+            color: var(--brand-green);
+            font-weight: 600;
+            font-size: 1.4rem;
+            text-decoration: none;
+        }
+
+        .navbar-brand:hover {
+            color: var(--brand-green);
+        }
+
+        .nav-link {
+            color: #666;
+            text-decoration: none;
+            font-weight: 500;
+            padding: 0.5rem 1rem;
+            border-radius: 8px;
+            transition: all 0.2s ease;
+        }
+
+        .nav-link:hover {
+            color: var(--brand-green);
+            background-color: rgba(74, 159, 130, 0.1);
+        }
+
+        /* Adjust hero section to account for fixed navbar */
+        .hero {
+            padding-top: 5rem;
+        }
     </style>
 </head>
 <body>
+    <nav class="navbar navbar-expand-lg">
+        <div class="container">
+            <a class="navbar-brand" href="/">Yayarecetas.com</a>
+            <div class="ms-auto">
+                {% if request.session.get('user_id') %}
+                    <a href="/recipes" class="nav-link d-inline-block me-3">Mis Recetas</a>
+                    <a href="/logout" class="nav-link d-inline-block">Cerrar Sesión</a>
+                {% else %}
+                    <a href="/login" class="nav-link">Identificarse</a>
+                {% endif %}
+            </div>
+        </div>
+    </nav>
+
     <div class="hero">
         <div class="container">
             <div class="row align-items-center">
