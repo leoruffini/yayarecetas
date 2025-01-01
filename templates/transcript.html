@@ -24,6 +24,46 @@
     <meta name="theme-color" content="#ffffff">
     <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.2/dist/css/bootstrap.min.css" rel="stylesheet">
     <style>
+        :root {
+            --brand-pink: #F8D7D0;
+            --brand-pink-dark: #E5B3AA;
+            --brand-teal: #4A9B8F;
+            --brand-teal-dark: #3D7D73;
+            --brand-cream: #FFF5E9;
+            --brand-brown: #5C4B45;
+        }
+
+        /* Navbar styles */
+        .navbar {
+            background-color: white;
+            box-shadow: 0 2px 8px rgba(0,0,0,0.08);
+            padding: 1rem;
+            width: 100%;
+            z-index: 1030;
+            margin-bottom: 2rem;
+        }
+
+        .navbar-brand {
+            color: var(--brand-green);
+            font-weight: 600;
+            font-size: 1.4rem;
+            text-decoration: none;
+        }
+
+        .nav-link {
+            color: #666;
+            text-decoration: none;
+            font-weight: 500;
+            padding: 0.5rem 1rem;
+            border-radius: 8px;
+            transition: all 0.2s ease;
+        }
+
+        .nav-link:hover {
+            color: var(--brand-green);
+            background-color: rgba(74, 159, 130, 0.1);
+        }
+
         body {
             background-color: #f8f9fa;
             font-family: 'Segoe UI', system-ui, -apple-system, sans-serif;
@@ -225,6 +265,21 @@
     </style>
 </head>
 <body>
+    <!-- Add navbar -->
+    <nav class="navbar navbar-expand-lg">
+        <div class="container">
+            <a class="navbar-brand" href="/">Yayarecetas</a>
+            <div class="ms-auto">
+                {% if request.session.get('user_id') %}
+                    <a href="/yaya{{ request.session.get('user_id') }}" class="nav-link d-inline-block me-3">Mis Recetas</a>
+                    <a href="/logout" class="nav-link d-inline-block">Cerrar Sesión</a>
+                {% else %}
+                    <a href="/login" class="nav-link">Identifícate</a>
+                {% endif %}
+            </div>
+        </div>
+    </nav>
+
     <div class="container py-4">
         {% if error_message %}
             <div class="error-message">
@@ -295,12 +350,21 @@
 
                 <!-- Add this before the subscription message -->
                 <div class="admin-actions">
-                    <a href="/edit/{{ user_id }}/{{ recipe_slug }}" class="admin-link">
-                        <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" fill="currentColor" viewBox="0 0 16 16">
-                            <path d="M15.502 1.94a.5.5 0 0 1 0 .706L14.459 3.69l-2-2L13.502.646a.5.5 0 0 1 .707 0l1.293 1.293zm-1.75 2.456-2-2L4.939 9.21a.5.5 0 0 0-.121.196l-.805 2.414a.25.25 0 0 0 .316.316l2.414-.805a.5.5 0 0 0 .196-.12l6.813-6.814z"/>
-                        </svg>
-                        Editar receta
-                    </a>
+                    {% if request.session.get('user_id') == user_id %}
+                        <a href="/edit/{{ user_id }}/{{ recipe_slug }}" class="admin-link">
+                            <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" fill="currentColor" viewBox="0 0 16 16">
+                                <path d="M15.502 1.94a.5.5 0 0 1 0 .706L14.459 3.69l-2-2L13.502.646a.5.5 0 0 1 .707 0l1.293 1.293zm-1.75 2.456-2-2L4.939 9.21a.5.5 0 0 0-.121.196l-.805 2.414a.25.25 0 0 0 .316.316l2.414-.805a.5.5 0 0 0 .196-.12l6.813-6.814z"/>
+                            </svg>
+                            Editar receta
+                        </a>
+                    {% else %}
+                        <a href="/login" class="admin-link">
+                            <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" fill="currentColor" viewBox="0 0 16 16">
+                                <path d="M8 1a2 2 0 0 1 2 2v4H6V3a2 2 0 0 1 2-2zm3 6V3a3 3 0 0 0-6 0v4a2 2 0 0 0-2 2v5a2 2 0 0 0 2 2h6a2 2 0 0 0 2-2V9a2 2 0 0 0-2-2z"/>
+                            </svg>
+                            Identifícate para editar
+                        </a>
+                    {% endif %}
                     <button onclick="copyShareLink()" 
                             class="admin-link" 
                             id="shareButton" 
@@ -312,7 +376,7 @@
                         <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" fill="currentColor" viewBox="0 0 16 16">
                             <path d="M13.5 1a1.5 1.5 0 1 0 0 3 1.5 1.5 0 0 0 0-3zM11 2.5a2.5 2.5 0 1 1 .603 1.628l-6.718 3.12a2.499 2.499 0 0 1 0 1.504l6.718 3.12a2.5 2.5 0 1 1-.488.876l-6.718-3.12a2.5 2.5 0 1 1 0-3.256l6.718-3.12A2.5 2.5 0 0 1 11 2.5z"/>
                         </svg>
-                        {% if is_private %}Compartir enlace privado{% else %}Compartir{% endif %}
+                        {% if is_private %}Compartir enlace privado{% else %}Compartir enlace{% endif %}
                     </button>
                     <input type="hidden" id="shareUrl" value="{{ request.base_url }}{% if is_private %}shared/{{ hash }}{% else %}yaya{{ user_id }}/{{ recipe_slug }}{% endif %}">
                 </div>

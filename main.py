@@ -80,6 +80,9 @@ RATE_LIMIT_WINDOW = timedelta(minutes=5)
 # Create a cache that expires entries after 5 minutes
 verification_cache = TTLCache(maxsize=100, ttl=300)  # 300 seconds = 5 minutes
 
+# Add near the top with other caches
+verification_attempts = TTLCache(maxsize=100, ttl=300)  # 5 minutes timeout
+
 @app.post("/create-checkout-session")
 async def create_checkout_session():
     return stripe_handler.create_checkout_session()
@@ -256,15 +259,13 @@ async def edit_recipe_page(
         if not message:
             raise HTTPException(status_code=404, detail="Recipe not found")
             
-        # Check if user is verified
-        is_verified = request.session.get(f"verified_{user_id}", False)
-        
-        if not is_verified:
-            # Redirect to verification page
-            return RedirectResponse(
-                f"/verify/{user_id}/{recipe_slug}",
-                status_code=302
-            )
+        # Check if user is logged in and matches the requested user_id
+        logged_in_user_id = request.session.get("user_id")
+        if not logged_in_user_id or logged_in_user_id != user_id:
+            return RedirectResponse("/login", status_code=302)
+            
+        # If user is logged in and matches, they're automatically verified
+        request.session[f"verified_{user_id}"] = True
             
         return templates.TemplateResponse("edit_recipe.html", {
             "request": request,
@@ -335,56 +336,17 @@ async def update_recipe(
         })
 
 @app.get("/verify/{user_id}/{recipe_slug}")
-async def verify_page(
+async def verify_recipe_page(
     user_id: int,
     recipe_slug: str,
     request: Request,
     db: Session = Depends(get_db)
 ):
-    try:
-        # Get user's phone number
-        user = db.query(User).filter(User.id == user_id).first()
-        if not user:
-            raise HTTPException(status_code=404, detail="User not found")
-            
-        # Use phone number as cache key
-        cache_key = user.phone_number
-        
-        if cache_key in verification_cache:
-            logger.info(f"Rate limit active for user {user_id}. Skipping code send.")
-            return templates.TemplateResponse("verify.html", {
-                "request": request,
-                "error": None,
-                "user_id": user_id,
-                "recipe_slug": recipe_slug
-            })
-            
-        logger.info(f"Sending verification code to user {user_id}")
-        
-        # Generate and send code
-        code = auth_handler.generate_verification_code()
-        request.session[f"pending_code_{user_id}"] = code
-        
-        # Add to rate limit cache
-        verification_cache[cache_key] = datetime.now()
-        
-        await auth_handler.send_verification_code(user_id, code, db)
-        
-        return templates.TemplateResponse("verify.html", {
-            "request": request,
-            "error": None,
-            "user_id": user_id,
-            "recipe_slug": recipe_slug
-        })
-        
-    except Exception as e:
-        logger.error(f"Error in verification page: {str(e)}")
-        return templates.TemplateResponse("verify.html", {
-            "request": request,
-            "error": "Error al enviar el código de verificación",
-            "user_id": user_id,
-            "recipe_slug": recipe_slug
-        })
+    return templates.TemplateResponse("verify.html", {
+        "request": request,
+        "verification_url": f"/verify/{user_id}/{recipe_slug}",
+        "error": None
+    })
 
 @app.post("/verify/{user_id}/{recipe_slug}")
 async def verify_code(
@@ -423,6 +385,102 @@ async def view_shared_recipe(
         "is_shared": True,
         "error_message": None
     })
+
+@app.get("/login")
+async def login_page(request: Request):
+    if request.session.get("user_id"):
+        return RedirectResponse("/recipes", status_code=302)
+        
+    return templates.TemplateResponse("login.html", {
+        "request": request,
+        "error": None
+    })
+
+@app.post("/login")
+async def login(request: Request, db: Session = Depends(get_db)):
+    form = await request.form()
+    phone_number = form.get("phone_number")
+    
+    # Check rate limiting
+    if verification_attempts.get(phone_number, 0) >= 3:
+        return templates.TemplateResponse("login.html", {
+            "request": request,
+            "error": "Demasiados intentos. Por favor, espera 5 minutos."
+        })
+    
+    # Get or create user
+    user = db.query(User).filter(User.phone_number == phone_number).first()
+    if not user:
+        user = User(phone_number=phone_number)
+        db.add(user)
+        db.commit()
+    
+    # Generate and store verification code
+    auth_handler = AuthHandler()
+    code = auth_handler.generate_verification_code()
+    request.session[f"pending_login_{phone_number}"] = code
+    
+    # Track verification attempts
+    verification_attempts[phone_number] = verification_attempts.get(phone_number, 0) + 1
+    
+    # Send verification code
+    await auth_handler.send_verification_code(user.id, code, db)
+    
+    return RedirectResponse(f"/verify_login/{phone_number}", status_code=302)
+
+@app.get("/verify_login/{phone_number}")
+async def verify_login_page(phone_number: str, request: Request):
+    return templates.TemplateResponse("verify.html", {
+        "request": request,
+        "verification_url": f"/verify_login/{phone_number}",
+        "error": None
+    })
+
+@app.post("/verify_login/{phone_number}")
+async def verify_login(
+    phone_number: str,
+    request: Request,
+    db: Session = Depends(get_db)
+):
+    form = await request.form()
+    submitted_code = form.get("code")
+    stored_code = request.session.get(f"pending_login_{phone_number}")
+    
+    if not stored_code:
+        return templates.TemplateResponse("verify.html", {
+            "request": request,
+            "verification_url": f"/verify_login/{phone_number}",
+            "error": "Sesión expirada. Por favor, intenta de nuevo."
+        })
+    
+    if submitted_code != stored_code:
+        return templates.TemplateResponse("verify.html", {
+            "request": request,
+            "verification_url": f"/verify_login/{phone_number}",
+            "error": "Código incorrecto"
+        })
+    
+    # Clear verification data
+    request.session.pop(f"pending_login_{phone_number}", None)
+    verification_attempts.pop(phone_number, None)
+    
+    # Set user session and verification status
+    user = db.query(User).filter(User.phone_number == phone_number).first()
+    if user:
+        request.session["user_id"] = user.id
+        request.session[f"verified_{user.id}"] = True  # Add this line
+        return RedirectResponse(f"/yaya{user.id}", status_code=302)
+    
+    return templates.TemplateResponse("verify.html", {
+        "request": request,
+        "verification_url": f"/verify_login/{phone_number}",
+        "error": "Usuario no encontrado"
+    })
+
+@app.get("/logout")
+async def logout(request: Request):
+    request.session.clear()
+    return RedirectResponse("/", status_code=302)
 
 # Retrieve database info
 print(f"CONNECTED TO DATABASE: {DATABASE_URL}")
