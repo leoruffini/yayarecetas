@@ -482,6 +482,30 @@ async def logout(request: Request):
     request.session.clear()
     return RedirectResponse("/", status_code=302)
 
+@app.post("/delete/{user_id}/{recipe_slug}")
+async def delete_recipe(
+    user_id: int,
+    recipe_slug: str,
+    request: Request,
+    db: Session = Depends(get_db)
+):
+    # Check if user is authenticated and authorized
+    logged_in_user_id = request.session.get("user_id")
+    if not logged_in_user_id or logged_in_user_id != user_id:
+        raise HTTPException(status_code=403, detail="Not authorized")
+    
+    # Get the recipe
+    message = db.query(Message).filter(Message.slug == recipe_slug).first()
+    if not message:
+        raise HTTPException(status_code=404, detail="Recipe not found")
+    
+    # Delete the recipe
+    db.delete(message)
+    db.commit()
+    
+    # Redirect to user's recipe list
+    return RedirectResponse(f"/yaya{user_id}", status_code=302)
+
 # Retrieve database info
 print(f"CONNECTED TO DATABASE: {DATABASE_URL}")
 
