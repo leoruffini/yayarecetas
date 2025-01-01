@@ -29,5 +29,7 @@ LOG_LEVEL = os.getenv('LOG_LEVEL', 'INFO').upper()
 MAX_WHATSAPP_MESSAGE_LENGTH = 1500
 ADMIN_PHONE_NUMBER = os.getenv('ADMIN_PHONE_NUMBER')
 
+VERIFICATION_TEMPLATE_SID = "HXcd4f6126f23f0e113c4fba5afc68f4a2"
+
 if not all([BASE_URL, STRIPE_PAYMENT_LINK, STRIPE_CUSTOMER_PORTAL_URL]):
     raise ValueError("Missing required environment variables")

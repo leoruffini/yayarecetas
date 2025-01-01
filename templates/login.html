@@ -1,0 +1,47 @@
+{% extends "base.html" %}
+
+{% block content %}
+<div class="container">
+    <div class="verification-container">
+        <h2 class="text-center mb-4">Iniciar Sesión</h2>
+        <p class="text-center mb-4">
+            Ingresa tu número de teléfono para recibir un código por WhatsApp
+        </p>
+        
+        {% if error %}
+        <div class="alert alert-danger">
+            {{ error }}
+        </div>
+        {% endif %}
+        
+        <form method="POST" action="/login" class="verification-form">
+            <div class="mb-3">
+                <input type="tel" 
+                       name="phone_number" 
+                       class="form-control form-control-lg text-center"
+                       placeholder="Ej: +34612345678"
+                       pattern="\+[0-9]+"
+                       required>
+            </div>
+            <button type="submit" class="btn btn-primary w-100">
+                Enviar Código
+            </button>
+        </form>
+    </div>
+</div>
+
+<style>
+.verification-container {
+    max-width: 400px;
+    margin: 4rem auto;
+    padding: 2rem;
+    background: white;
+    border-radius: 16px;
+    box-shadow: 0 2px 8px rgba(0, 0, 0, 0.06);
+}
+
+.verification-form input {
+    font-size: 24px;
+}
+</style>
+{% endblock %} 
